@@ -28,8 +28,10 @@
     #hp { height:100%; width:100%; background:linear-gradient(90deg,#ff3d75,#ff9a48); transition:width .22s ease; }
     .prompt { min-height:73px; font-size:clamp(1.55rem,5vw,3rem); font-weight:900; letter-spacing:.06em; word-break:break-all; }
     .correct { color:var(--cyan); text-shadow:0 0 13px #39defb; } .wrong { color:var(--pink); text-decoration:underline; }
+    .typed { opacity:.28; color:var(--ink); text-shadow:none; }
     .romaji { min-height:26px; color:var(--gold); font-size:1rem; font-weight:800; letter-spacing:.12em; text-transform:lowercase; }
     input { width:min(600px,100%); margin:22px auto 0; display:block; border:2px solid #55799b; background:#071121; color:white; border-radius:10px; padding:16px 18px; font-size:1.15rem; outline:none; text-align:center; transition:.2s; }
+    #typing { position:absolute; width:1px; height:1px; margin:0; padding:0; border:0; opacity:0; pointer-events:none; }
     input:focus { border-color:var(--cyan); box-shadow:0 0 0 4px rgba(76,230,255,.14),0 0 20px rgba(76,230,255,.25); } input:disabled { opacity:.45; }
     input.input-error { border-color:var(--pink); box-shadow:0 0 0 4px rgba(255,79,145,.12); }
     .message { min-height:24px; margin:17px 0 0; color:var(--muted); font-weight:700; }
@@ -40,26 +42,31 @@
     .online { margin:0 0 18px; border-radius:12px; padding:14px 16px; display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:10px; }
     .online strong { color:var(--cyan); letter-spacing:.08em; } .online input { margin:0; padding:10px; font-size:.9rem; text-align:left; } .online button { padding:10px 14px; font-size:.78rem; box-shadow:none; }
     .online-status { grid-column:1/-1; margin:0; color:var(--muted); font-size:.82rem; }
+    .duel-board { display:none; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
+    .duel-mode .duel-board { display:grid; } .duel-mode .enemy,.duel-mode .enemy-name,.duel-mode .health { display:none; }
+    .fighter { padding:13px 16px; border-radius:12px; } .fighter span { color:var(--muted); font-size:.72rem; font-weight:800; letter-spacing:.1em; } .fighter strong { display:block; font-size:1.35rem; margin-top:4px; }
+    .duel-hp { margin-top:8px; height:10px; border-radius:999px; background:#1b2941; overflow:hidden; } .duel-hp i { display:block; height:100%; width:100%; background:linear-gradient(90deg,var(--cyan),#52ffb1); transition:width .25s; } #rivalHpBar { background:linear-gradient(90deg,#ff3d75,#ff9a48); }
     @media(max-width:600px){.online{grid-template-columns:1fr 1fr}.online strong{grid-column:1/-1}.online input{grid-column:1/-1}.online button{width:100%}}
   </style>
 </head>
 <body>
   <main>
     <header><h1>TYPE BATTLE</h1><div class="tag">JAPANESE MODE</div></header>
-    <section class="online stat"><strong>ONLINE DUEL</strong><input id="roomCode" maxlength="6" placeholder="部屋コード" /><button id="createRoom">部屋を作る</button><button id="joinRoom">参加する</button><p class="online-status" id="onlineStatus">部屋コードを共有して、友だちとスコア対戦しよう。</p></section>
-    <section class="hud"><div class="stat"><span>ROUND</span><strong id="round">1 / 5</strong></div><div class="stat"><span>SCORE</span><strong id="score">0</strong></div><div class="stat"><span>TIME</span><strong id="time">0.0s</strong></div></section>
+    <section class="online stat"><strong>ONLINE DUEL</strong><input id="roomCode" maxlength="6" placeholder="部屋コード" /><button id="createRoom">部屋を作る</button><button id="joinRoom">参加する</button><p class="online-status" id="onlineStatus">部屋コードを共有して、友だちとHPバトルしよう。</p></section>
+    <section class="duel-board" id="duelBoard"><div class="fighter stat"><span>YOUR HP</span><strong id="myHp">100 / 100</strong><div class="duel-hp"><i id="myHpBar"></i></div></div><div class="fighter stat"><span>RIVAL HP</span><strong id="rivalHp">100 / 100</strong><div class="duel-hp"><i id="rivalHpBar"></i></div></div></section>
+    <section class="hud"><div class="stat"><span>ROUND</span><strong id="round">1</strong></div><div class="stat"><span>SCORE</span><strong id="score">0</strong></div><div class="stat"><span>TIME LEFT</span><strong id="time">60.0s</strong></div></section>
     <section class="arena" id="arena">
       <div class="round" id="label">ENEMY APPROACHING</div><div class="enemy" id="enemy">👾</div><div class="enemy-name" id="enemyName">バグモンスター</div>
       <div class="health"><div id="hp"></div></div><div class="prompt" id="prompt">スタートを押して戦闘開始</div>
       <div class="romaji" id="romaji">ROMAJI</div>
-      <input id="typing" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="latin" placeholder="romaji de nyuuryoku" disabled />
-      <p class="message" id="message">表示されたことばをローマ字でタイプ！</p><button id="start">START BATTLE</button>
+      <input id="typing" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="latin" aria-hidden="true" disabled />
+      <p class="message" id="message">キーボードでローマ字を直接タイプ！</p><button id="start">START BATTLE</button>
     </section>
     <footer>ENTER で再挑戦 ・ タイピングでコンボをつなげよう</footer>
   </main>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
-    import { getDatabase, ref, set, get, update, onValue } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
+    import { getDatabase, ref, set, get, update, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
     const firebaseConfig = {
       apiKey: 'AIzaSyA2Q7mg3welrS7TQ6j6KNi-edO4YQEuKuU',
       authDomain: 'typing-battle-4b4d3.firebaseapp.com',
@@ -70,32 +77,35 @@
       appId: '1:884825302504:web:fb6c922aabdcf8f895305d'
     };
     const db = getDatabase(initializeApp(firebaseConfig));
-    const words=["ねこ","いぬ","さくら","すいか","きらきら","たいよう","ほしぞら","にんじゃ","ロボット","まほうつかい","チョコレート","ペンギン","おんがく","スーパー","エネルギー","プログラミング","タイピング","ドラゴン","ぼうけんしゃ","わくわく","かみなり","ひみつきち","コンピューター","レインボー","スペースシップ"];
+    const words=["ねこ","いぬ","さくら","すいか","きらきら","たいよう","ほしぞら","にんじゃ","ロボット","まほうつかい","チョコレート","ペンギン","おんがく","スーパー","エネルギー","プログラミング","タイピング","ドラゴン","ぼうけんしゃ","わくわく","かみなり","ひみつきち","コンピューター","レインボー","スペースシップ","あさごはん","おべんとう","がっこう","きって","しんぶん","でんしゃ","とけい","にわとり","ひこうき","びょういん","ゆうびんきょく","きょうりゅう","かくれんぼ","おにごっこ","しょうぼうしゃ","じてんしゃ","すいぞくかん","どうぶつえん","たからばこ","ひまわり","あまぐも","しんかんせん","えんぴつ","けしごむ","おもちゃばこ","ふうせん","きんぎょ","かたつむり","たんじょうび","クリスマス","アイスクリーム","サッカー","バスケットボール","おはようございます","きょうはいいてんきです","ともだちとあそぼう","たいぴんぐはたのしい","あしたもがんばろう"];
     const enemies=[['👾','バグモンスター'],['🤖','メカ・タイパー'],['👻','ゴーストキー'],['🐲','ワードドラゴン'],['👑','最終ボス・キーキング']];
     const map={
       '\u304d\u3083':['kya'],'\u304d\u3085':['kyu'],'\u304d\u3087':['kyo'],'\u3057\u3083':['sha','sya'],'\u3057\u3085':['shu','syu'],'\u3057\u3087':['sho','syo'],'\u3061\u3083':['cha','tya'],'\u3061\u3085':['chu','tyu'],'\u3061\u3087':['cho','tyo'],'\u306b\u3083':['nya'],'\u306b\u3085':['nyu'],'\u306b\u3087':['nyo'],'\u3072\u3083':['hya'],'\u3072\u3085':['hyu'],'\u3072\u3087':['hyo'],'\u307f\u3083':['mya'],'\u307f\u3085':['myu'],'\u307f\u3087':['myo'],'\u308a\u3083':['rya'],'\u308a\u3085':['ryu'],'\u308a\u3087':['ryo'],'\u304e\u3083':['gya'],'\u304e\u3085':['gyu'],'\u304e\u3087':['gyo'],'\u3058\u3083':['ja','jya','zya'],'\u3058\u3085':['ju','jyu','zyu'],'\u3058\u3087':['jo','jyo','zyo'],'\u3073\u3083':['bya'],'\u3073\u3085':['byu'],'\u3073\u3087':['byo'],'\u3074\u3083':['pya'],'\u3074\u3085':['pyu'],'\u3074\u3087':['pyo'],
       '\u3042':['a'],'\u3044':['i'],'\u3046':['u','wu'],'\u3048':['e'],'\u304a':['o'],'\u304b':['ka'],'\u304d':['ki'],'\u304f':['ku'],'\u3051':['ke'],'\u3053':['ko'],'\u3055':['sa'],'\u3057':['shi','si'],'\u3059':['su'],'\u305b':['se'],'\u305d':['so'],'\u305f':['ta'],'\u3061':['chi','ti'],'\u3064':['tsu','tu'],'\u3066':['te'],'\u3068':['to'],'\u306a':['na'],'\u306b':['ni'],'\u306c':['nu'],'\u306d':['ne'],'\u306e':['no'],'\u306f':['ha'],'\u3072':['hi'],'\u3075':['fu','hu'],'\u3078':['he'],'\u307b':['ho'],'\u307e':['ma'],'\u307f':['mi'],'\u3080':['mu'],'\u3081':['me'],'\u3082':['mo'],'\u3084':['ya'],'\u3086':['yu'],'\u3088':['yo'],'\u3089':['ra'],'\u308a':['ri'],'\u308b':['ru'],'\u308c':['re'],'\u308d':['ro'],'\u308f':['wa'],'\u3092':['wo','o'],'\u3093':['nn','xn','n'],'\u304c':['ga'],'\u304e':['gi'],'\u3050':['gu'],'\u3052':['ge'],'\u3054':['go'],'\u3056':['za'],'\u3058':['ji','zi'],'\u305a':['zu'],'\u305c':['ze'],'\u305e':['zo'],'\u3060':['da'],'\u3062':['di'],'\u3065':['du'],'\u3067':['de'],'\u3069':['do'],'\u3070':['ba'],'\u3073':['bi'],'\u3076':['bu'],'\u3079':['be'],'\u307c':['bo'],'\u3071':['pa'],'\u3074':['pi'],'\u3077':['pu'],'\u307a':['pe'],'\u307d':['po'],'\u30fc':['-']
     };
-    const $=id=>document.getElementById(id); let round=0,score=0,started=0,word='',answers=[],active=false,ticks;
-    const playerId='p'+crypto.randomUUID().replaceAll('-','').slice(0,10); let room='',unwatch=null;
+    const $=id=>document.getElementById(id); let round=0,score=0,started=0,word='',answers=[],correctInput='',active=false,ticks,finished=false;
+    const playerId='p'+crypto.randomUUID().replaceAll('-','').slice(0,10); let room='',unwatch=null,rivalId='',hp=100,rivalHp=100;
     const roomCode=()=>Math.random().toString(36).slice(2,8).toUpperCase();
-    const playerData=()=>({score,round,name:'PLAYER '+playerId.slice(-3),complete:false,updatedAt:Date.now()});
+    const playerData=()=>({score,round,hp,name:'PLAYER '+playerId.slice(-3),complete:finished,updatedAt:Date.now()});
     function setOnlineStatus(text){$('onlineStatus').textContent=text;}
-    function watchRoom(code){ if(unwatch)unwatch(); unwatch=onValue(ref(db,'rooms/'+code),snap=>{const data=snap.val();if(!data){setOnlineStatus('部屋が見つかりません。');return;}const players=data.players||{};const rival=Object.entries(players).find(([id])=>id!==playerId);if(rival){const p=rival[1];setOnlineStatus(`対戦中：相手 ${p.name} ／ ${p.round||0}体撃破・${p.score||0}点`);}else setOnlineStatus(`部屋 ${code} を作成しました。友だちにこのコードを伝えてください。`);});}
-    async function createRoom(){ room=roomCode(); await set(ref(db,'rooms/'+room),{createdAt:Date.now(),players:{[playerId]:playerData()}}); $('roomCode').value=room; watchRoom(room); }
-    async function joinRoom(){ const code=$('roomCode').value.trim().toUpperCase();if(!/^[A-Z0-9]{6}$/.test(code)){setOnlineStatus('6文字の部屋コードを入力してください。');return;}const snap=await get(ref(db,'rooms/'+code));if(!snap.exists()){setOnlineStatus('その部屋はありません。');return;}const players=snap.val().players||{};if(Object.keys(players).length>=2&&!players[playerId]){setOnlineStatus('この部屋は満員です。');return;}room=code;await update(ref(db,'rooms/'+room+'/players'),{[playerId]:playerData()});watchRoom(room);setOnlineStatus('参加しました。START BATTLEで対戦開始！');}
+    function updateHpView(){ $('myHp').textContent=`${hp} / 100`; $('rivalHp').textContent=`${rivalHp} / 100`; $('myHpBar').style.width=hp+'%'; $('rivalHpBar').style.width=rivalHp+'%'; }
+    function endDuel(result){if(finished)return;finished=true;active=false;clearInterval(ticks);$('typing').disabled=true;$('label').textContent=result;$('prompt').textContent=result==='YOU WIN!'?'VICTORY!':'DEFEAT...';$('romaji').textContent='';$('message').textContent=result==='YOU WIN!'?'相手のHPを0にした！':'あなたのHPが0になった…';$('start').textContent='REMATCH';$('start').style.display='block';setOnlineStatus(result);}
+    function watchRoom(code){if(unwatch)unwatch();unwatch=onValue(ref(db,'rooms/'+code),snap=>{const data=snap.val();if(!data){setOnlineStatus('部屋が見つかりません。');return;}const players=data.players||{};const mine=players[playerId];if(mine&&typeof mine.hp==='number')hp=mine.hp;const rival=Object.entries(players).find(([id])=>id!==playerId);if(rival){rivalId=rival[0];const p=rival[1];rivalHp=typeof p.hp==='number'?p.hp:100;setOnlineStatus(`対戦中：自分 HP ${hp} ／ 相手 HP ${rivalHp}`);if(active&&hp<=0)endDuel('YOU LOSE...');if(active&&rivalHp<=0)endDuel('YOU WIN!');}else{rivalId='';rivalHp=100;setOnlineStatus(`部屋 ${code} を作成しました。友だちにこのコードを伝えてください。`);}updateHpView();});}
+    async function createRoom(){room=roomCode();hp=100;rivalHp=100;document.body.classList.add('duel-mode');updateHpView();await set(ref(db,'rooms/'+room),{createdAt:Date.now(),players:{[playerId]:playerData()}});$('roomCode').value=room;watchRoom(room);}
+    async function joinRoom(){const code=$('roomCode').value.trim().toUpperCase();if(!/^[A-Z0-9]{6}$/.test(code)){setOnlineStatus('6文字の部屋コードを入力してください。');return;}const snap=await get(ref(db,'rooms/'+code));if(!snap.exists()){setOnlineStatus('その部屋はありません。');return;}const players=snap.val().players||{};if(Object.keys(players).length>=2&&!players[playerId]){setOnlineStatus('この部屋は満員です。');return;}room=code;hp=100;document.body.classList.add('duel-mode');await update(ref(db,'rooms/'+room+'/players'),{[playerId]:playerData()});watchRoom(room);setOnlineStatus('参加しました。START BATTLEで対戦開始！');}
     function syncOnline(){if(room)update(ref(db,'rooms/'+room+'/players/'+playerId),playerData());}
+    async function attackRival(){if(!room||!rivalId)return;await runTransaction(ref(db,'rooms/'+room+'/players/'+rivalId+'/hp'),value=>typeof value==='number'?Math.max(0,value-5):100);}
     function choose(){ return words[Math.floor(Math.random()*words.length)]; }
     function toHiragana(text){return text.replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));}
     function romajiOptions(kana){ kana=toHiragana(kana); let parts=[]; for(let i=0;i<kana.length;){let token=kana.slice(i,i+2);if(!map[token])token=kana[i];i+=token.length;if(token==='\u3063'){const next=map[kana.slice(i,i+2)]||map[kana[i]]||[''];parts.push(['xtsu','ltsu',...next.map(x=>x[0]||'')]);}else parts.push(map[token]||['']);} return parts.reduce((all,opts)=>all.flatMap(a=>opts.map(b=>a+b)),['']).filter(Boolean); }
-    function renderWord(){ const typed=$('typing').value.toLowerCase(); const valid=answers.some(a=>a.startsWith(typed)); $('prompt').textContent=word; $('romaji').textContent=answers[0]||'ROMAJI'; $('romaji').className='romaji'; $('typing').classList.toggle('input-error',Boolean(typed)&&!valid); }
-    function setEnemy(){ const e=enemies[round]; $('enemy').textContent=e[0]; $('enemyName').textContent=e[1]; $('round').textContent=`${round+1} / 5`; $('hp').style.width='100%'; word=choose(); answers=romajiOptions(word); $('typing').value=''; renderWord(); }
-    function begin(){ round=0;score=0;started=Date.now();active=true;$('score').textContent=score;$('start').style.display='none';$('typing').disabled=false;$('typing').focus();$('label').textContent='TYPE TO ATTACK';setEnemy();syncOnline(); clearInterval(ticks);ticks=setInterval(()=>{$('time').textContent=((Date.now()-started)/1000).toFixed(1)+'s'},100); }
-    function finish(){ active=false;clearInterval(ticks);$('typing').disabled=true; const sec=(Date.now()-started)/1000; $('label').textContent='VICTORY!';$('prompt').textContent='CLEAR!!';$('romaji').textContent='';$('message').textContent=`5体撃破！ スコア ${score} ・ ${sec.toFixed(1)}秒`; $('start').textContent='PLAY AGAIN';$('start').style.display='block';syncOnline(); }
-    $('typing').addEventListener('input',()=>{ if(!active)return; $('typing').value=$('typing').value.replace(/[^a-z-]/gi,'').toLowerCase(); const value=$('typing').value; const valid=answers.some(a=>a.startsWith(value)); renderWord(); if(answers.includes(value)){score+=Math.max(100,Math.round(600-(Date.now()-started)/20));$('score').textContent=score;$('hp').style.width='0%';$('arena').classList.add('shake');setTimeout(()=>{$('arena').classList.remove('shake');round++;syncOnline();if(round===enemies.length)finish();else{$('label').textContent='ENEMY DEFEATED!';setTimeout(setEnemy,350);}},260);} else if(!valid){$('arena').classList.add('shake');setTimeout(()=>$('arena').classList.remove('shake'),250);}});
+    function renderWord(){const typed=$('typing').value.toLowerCase();const matched=answers.find(a=>a.startsWith(typed))||answers[0]||'';const valid=answers.some(a=>a.startsWith(typed));$('prompt').textContent=word;$('romaji').innerHTML=[...matched].map((c,i)=>`<span class="${i<typed.length?(typed[i]===c?'typed':'wrong'):''}">${c}</span>`).join('');$('romaji').className='romaji';$('typing').classList.toggle('input-error',Boolean(typed)&&!valid);}
+    function setEnemy(){ const e=enemies[round%enemies.length]; $('enemy').textContent=e[0]; $('enemyName').textContent=e[1]; $('round').textContent=round+1; $('hp').style.width='100%'; word=choose(); answers=romajiOptions(word); correctInput=''; $('typing').value=''; renderWord(); }
+    function begin(){round=0;score=0;started=Date.now();finished=false;active=true;if(room){hp=100;updateHpView();$('time').textContent='∞';$('message').textContent='文章を正確に打って、相手へ5ダメージ！';}else $('time').textContent='60.0s';$('score').textContent=score;$('start').style.display='none';$('typing').disabled=false;$('typing').focus();$('label').textContent='TYPE TO ATTACK';setEnemy();syncOnline();clearInterval(ticks);if(!room)ticks=setInterval(()=>{const left=Math.max(0,60000-(Date.now()-started));$('time').textContent=(left/1000).toFixed(1)+'s';if(left===0)finish();},100);}
+    function finish(){ if(finished)return;finished=true;active=false;clearInterval(ticks);$('typing').disabled=true; $('label').textContent='TIME UP!';$('prompt').textContent='FINISH!';$('romaji').textContent='';$('message').textContent=`60秒終了！ スコア ${score}`; $('start').textContent='PLAY AGAIN';$('start').style.display='block';syncOnline(); }
+    $('typing').addEventListener('input',()=>{if(!active)return;$('typing').value=$('typing').value.replace(/[^a-z-]/gi,'').toLowerCase();const value=$('typing').value;const valid=answers.some(a=>a.startsWith(value));if(!valid){$('typing').value=correctInput;renderWord();$('arena').classList.add('shake');setTimeout(()=>$('arena').classList.remove('shake'),250);return;}correctInput=value;renderWord();if(answers.includes(value)){$('typing').disabled=true;score+=Math.max(100,Math.round(600-(Date.now()-started)/20));$('score').textContent=score;$('hp').style.width='0%';$('arena').classList.add('shake');if(room)attackRival();setTimeout(()=>{$('arena').classList.remove('shake');round++;syncOnline();$('label').textContent=room?'HIT! -5 HP':'ENEMY DEFEATED!';setTimeout(()=>{if(active){setEnemy();$('typing').disabled=false;$('typing').focus();}},350);},260);}});
     $('createRoom').addEventListener('click',()=>createRoom().catch(()=>setOnlineStatus('部屋を作れませんでした。Firebase設定を確認してください。')));
     $('joinRoom').addEventListener('click',()=>joinRoom().catch(()=>setOnlineStatus('参加できませんでした。Firebase設定を確認してください。')));
-    $('start').addEventListener('click',begin); document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!active)begin()}); $('start').style.display='block';
+    $('start').addEventListener('click',begin); document.addEventListener('keydown',e=>{if(active&&e.key==='Backspace')e.preventDefault();if(e.key==='Enter'&&!active)begin()}); document.addEventListener('pointerdown',()=>{if(active)$('typing').focus()}); $('start').style.display='block';
   </script>
 </body>
 </html>
