@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TYPE BATTLE — タイピングバトル</title>
+  <style>
+    :root { --ink:#eaf6ff; --muted:#90a8bb; --cyan:#4ce6ff; --pink:#ff4f91; --gold:#ffd166; --panel:rgba(11,23,43,.78); }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--ink); font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif; background:#060c1a; overflow-x:hidden; }
+    body:before { content:""; position:fixed; inset:0; z-index:-2; background:radial-gradient(circle at 18% 20%,#163875 0,transparent 32%),radial-gradient(circle at 83% 74%,#581d5c 0,transparent 34%),linear-gradient(135deg,#070b18,#101b36); }
+    body:after { content:""; position:fixed; inset:0; z-index:-1; opacity:.16; background-image:linear-gradient(#87d7ff 1px,transparent 1px),linear-gradient(90deg,#87d7ff 1px,transparent 1px); background-size:44px 44px; mask-image:linear-gradient(to bottom,transparent,black); }
+    main { width:min(920px,calc(100% - 32px)); margin:auto; padding:36px 0 28px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px; }
+    h1 { margin:0; font-size:clamp(1.6rem,5vw,3rem); letter-spacing:.08em; font-style:italic; text-shadow:0 0 20px #31d8ff; }
+    .tag { border:1px solid var(--cyan); color:var(--cyan); font-weight:800; padding:7px 11px; border-radius:999px; font-size:.76rem; letter-spacing:.08em; }
+    .hud { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px; }
+    .stat,.arena { border:1px solid rgba(126,204,255,.25); background:var(--panel); box-shadow:0 14px 50px rgba(0,0,0,.25); backdrop-filter:blur(10px); }
+    .stat { padding:13px 16px; border-radius:12px; }
+    .stat span { display:block; color:var(--muted); font-size:.72rem; font-weight:700; letter-spacing:.12em; }
+    .stat strong { font-size:1.42rem; }
+    .arena { border-radius:18px; padding:clamp(22px,5vw,48px); text-align:center; min-height:410px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; }
+    .arena.shake { animation:shake .35s; } @keyframes shake { 25%{transform:translateX(9px)} 50%{transform:translateX(-8px)} 75%{transform:translateX(4px)} }
+    .round { color:var(--gold); font-weight:800; letter-spacing:.16em; font-size:.8rem; }
+    .enemy { font-size:clamp(4rem,13vw,8rem); filter:drop-shadow(0 0 17px #ff377c); line-height:1.1; margin:13px 0 5px; }
+    .enemy-name { font-weight:900; font-size:1.18rem; letter-spacing:.1em; }
+    .health { height:13px; width:min(450px,100%); margin:19px auto 27px; border-radius:999px; background:#1b2941; overflow:hidden; border:1px solid #405274; }
+    #hp { height:100%; width:100%; background:linear-gradient(90deg,#ff3d75,#ff9a48); transition:width .22s ease; }
+    .prompt { min-height:73px; font-size:clamp(1.55rem,5vw,3rem); font-weight:900; letter-spacing:.06em; word-break:break-all; }
+    .correct { color:var(--cyan); text-shadow:0 0 13px #39defb; } .wrong { color:var(--pink); text-decoration:underline; }
+    .romaji { min-height:26px; color:var(--gold); font-size:1rem; font-weight:800; letter-spacing:.12em; text-transform:lowercase; }
+    input { width:min(600px,100%); margin:22px auto 0; display:block; border:2px solid #55799b; background:#071121; color:white; border-radius:10px; padding:16px 18px; font-size:1.15rem; outline:none; text-align:center; transition:.2s; }
+    input:focus { border-color:var(--cyan); box-shadow:0 0 0 4px rgba(76,230,255,.14),0 0 20px rgba(76,230,255,.25); } input:disabled { opacity:.45; }
+    input.input-error { border-color:var(--pink); box-shadow:0 0 0 4px rgba(255,79,145,.12); }
+    .message { min-height:24px; margin:17px 0 0; color:var(--muted); font-weight:700; }
+    button { cursor:pointer; border:0; border-radius:10px; padding:14px 26px; color:#06101e; background:var(--cyan); font-size:1rem; font-weight:900; letter-spacing:.06em; box-shadow:0 7px 0 #168fa5; transition:transform .1s; }
+    button:active { transform:translateY(4px); box-shadow:0 3px 0 #168fa5; } #start { margin:18px auto 0; display:none; }
+    footer { text-align:center; color:#6f8798; font-size:.76rem; margin-top:21px; }
+    @media(max-width:520px){ main{padding-top:22px}.hud{gap:7px}.stat{padding:10px}.stat strong{font-size:1.1rem}.arena{min-height:460px;padding:22px 16px} }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>TYPE BATTLE</h1><div class="tag">JAPANESE MODE</div></header>
+    <section class="hud"><div class="stat"><span>ROUND</span><strong id="round">1 / 5</strong></div><div class="stat"><span>SCORE</span><strong id="score">0</strong></div><div class="stat"><span>TIME</span><strong id="time">0.0s</strong></div></section>
+    <section class="arena" id="arena">
+      <div class="round" id="label">ENEMY APPROACHING</div><div class="enemy" id="enemy">👾</div><div class="enemy-name" id="enemyName">バグモンスター</div>
+      <div class="health"><div id="hp"></div></div><div class="prompt" id="prompt">スタートを押して戦闘開始</div>
+      <div class="romaji" id="romaji">ROMAJI</div>
+      <input id="typing" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="latin" placeholder="romaji de nyuuryoku" disabled />
+      <p class="message" id="message">表示されたことばをローマ字でタイプ！</p><button id="start">START BATTLE</button>
+    </section>
+    <footer>ENTER で再挑戦 ・ タイピングでコンボをつなげよう</footer>
+  </main>
+  <script>
+    const words=["ねこ","いぬ","さくら","すいか","きらきら","たいよう","ほしぞら","にんじゃ","ロボット","まほうつかい","チョコレート","ペンギン","おんがく","スーパー","エネルギー","プログラミング","タイピング","ドラゴン","ぼうけんしゃ","わくわく","かみなり","ひみつきち","コンピューター","レインボー","スペースシップ"];
+    const enemies=[['👾','バグモンスター'],['🤖','メカ・タイパー'],['👻','ゴーストキー'],['🐲','ワードドラゴン'],['👑','最終ボス・キーキング']];
+    const map={
+      '\u304d\u3083':['kya'],'\u304d\u3085':['kyu'],'\u304d\u3087':['kyo'],'\u3057\u3083':['sha','sya'],'\u3057\u3085':['shu','syu'],'\u3057\u3087':['sho','syo'],'\u3061\u3083':['cha','tya'],'\u3061\u3085':['chu','tyu'],'\u3061\u3087':['cho','tyo'],'\u306b\u3083':['nya'],'\u306b\u3085':['nyu'],'\u306b\u3087':['nyo'],'\u3072\u3083':['hya'],'\u3072\u3085':['hyu'],'\u3072\u3087':['hyo'],'\u307f\u3083':['mya'],'\u307f\u3085':['myu'],'\u307f\u3087':['myo'],'\u308a\u3083':['rya'],'\u308a\u3085':['ryu'],'\u308a\u3087':['ryo'],'\u304e\u3083':['gya'],'\u304e\u3085':['gyu'],'\u304e\u3087':['gyo'],'\u3058\u3083':['ja','jya','zya'],'\u3058\u3085':['ju','jyu','zyu'],'\u3058\u3087':['jo','jyo','zyo'],'\u3073\u3083':['bya'],'\u3073\u3085':['byu'],'\u3073\u3087':['byo'],'\u3074\u3083':['pya'],'\u3074\u3085':['pyu'],'\u3074\u3087':['pyo'],
+      '\u3042':['a'],'\u3044':['i'],'\u3046':['u','wu'],'\u3048':['e'],'\u304a':['o'],'\u304b':['ka'],'\u304d':['ki'],'\u304f':['ku'],'\u3051':['ke'],'\u3053':['ko'],'\u3055':['sa'],'\u3057':['shi','si'],'\u3059':['su'],'\u305b':['se'],'\u305d':['so'],'\u305f':['ta'],'\u3061':['chi','ti'],'\u3064':['tsu','tu'],'\u3066':['te'],'\u3068':['to'],'\u306a':['na'],'\u306b':['ni'],'\u306c':['nu'],'\u306d':['ne'],'\u306e':['no'],'\u306f':['ha'],'\u3072':['hi'],'\u3075':['fu','hu'],'\u3078':['he'],'\u307b':['ho'],'\u307e':['ma'],'\u307f':['mi'],'\u3080':['mu'],'\u3081':['me'],'\u3082':['mo'],'\u3084':['ya'],'\u3086':['yu'],'\u3088':['yo'],'\u3089':['ra'],'\u308a':['ri'],'\u308b':['ru'],'\u308c':['re'],'\u308d':['ro'],'\u308f':['wa'],'\u3092':['wo','o'],'\u3093':['nn','xn','n'],'\u304c':['ga'],'\u304e':['gi'],'\u3050':['gu'],'\u3052':['ge'],'\u3054':['go'],'\u3056':['za'],'\u3058':['ji','zi'],'\u305a':['zu'],'\u305c':['ze'],'\u305e':['zo'],'\u3060':['da'],'\u3062':['di'],'\u3065':['du'],'\u3067':['de'],'\u3069':['do'],'\u3070':['ba'],'\u3073':['bi'],'\u3076':['bu'],'\u3079':['be'],'\u307c':['bo'],'\u3071':['pa'],'\u3074':['pi'],'\u3077':['pu'],'\u307a':['pe'],'\u307d':['po'],'\u30fc':['-']
+    };
+    const $=id=>document.getElementById(id); let round=0,score=0,started=0,word='',answers=[],active=false,ticks;
+    function choose(){ return words[Math.floor(Math.random()*words.length)]; }
+    function toHiragana(text){return text.replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));}
+    function romajiOptions(kana){ kana=toHiragana(kana); let parts=[]; for(let i=0;i<kana.length;){let token=kana.slice(i,i+2);if(!map[token])token=kana[i];i+=token.length;if(token==='\u3063'){const next=map[kana.slice(i,i+2)]||map[kana[i]]||[''];parts.push(['xtsu','ltsu',...next.map(x=>x[0]||'')]);}else parts.push(map[token]||['']);} return parts.reduce((all,opts)=>all.flatMap(a=>opts.map(b=>a+b)),['']).filter(Boolean); }
+    function renderWord(){ const typed=$('typing').value.toLowerCase(); const valid=answers.some(a=>a.startsWith(typed)); $('prompt').textContent=word; $('romaji').textContent=answers[0]||'ROMAJI'; $('romaji').className='romaji'; $('typing').classList.toggle('input-error',Boolean(typed)&&!valid); }
+    function setEnemy(){ const e=enemies[round]; $('enemy').textContent=e[0]; $('enemyName').textContent=e[1]; $('round').textContent=`${round+1} / 5`; $('hp').style.width='100%'; word=choose(); answers=romajiOptions(word); $('typing').value=''; renderWord(); }
+    function begin(){ round=0;score=0;started=Date.now();active=true;$('score').textContent=score;$('start').style.display='none';$('typing').disabled=false;$('typing').focus();$('label').textContent='TYPE TO ATTACK';setEnemy(); clearInterval(ticks);ticks=setInterval(()=>{$('time').textContent=((Date.now()-started)/1000).toFixed(1)+'s'},100); }
+    function finish(){ active=false;clearInterval(ticks);$('typing').disabled=true; const sec=(Date.now()-started)/1000; $('label').textContent='VICTORY!';$('prompt').textContent='CLEAR!!';$('romaji').textContent='';$('message').textContent=`5体撃破！ スコア ${score} ・ ${sec.toFixed(1)}秒`; $('start').textContent='PLAY AGAIN';$('start').style.display='block'; }
+    $('typing').addEventListener('input',()=>{ if(!active)return; $('typing').value=$('typing').value.replace(/[^a-z-]/gi,'').toLowerCase(); const value=$('typing').value; const valid=answers.some(a=>a.startsWith(value)); renderWord(); if(answers.includes(value)){score+=Math.max(100,Math.round(600-(Date.now()-started)/20));$('score').textContent=score;$('hp').style.width='0%';$('arena').classList.add('shake');setTimeout(()=>{$('arena').classList.remove('shake');round++;if(round===enemies.length)finish();else{$('label').textContent='ENEMY DEFEATED!';setTimeout(setEnemy,350);}},260);} else if(!valid){$('arena').classList.add('shake');setTimeout(()=>$('arena').classList.remove('shake'),250);}});
+    $('start').addEventListener('click',begin); document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!active)begin()}); $('start').style.display='block';
+  </script>
+</body>
+</html>
